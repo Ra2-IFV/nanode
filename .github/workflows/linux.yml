@@ -11,25 +11,38 @@ jobs:
   build-linux:
     strategy:
       matrix:
-        version: ['v22.x', 'v20.x', 'v18.x', 'v16.x', 'v21.x', 'v19.x', 'v17.x']
-        strategy: [a, b, c, d]
+        version: ['v22.x']
+        strategy: [
+          full_v8_lto_ptrcomp
+        ]
         architecture: [arm64, x64]
     runs-on: ubuntu-latest
 
     steps:
       - name: Setup repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         
       - name: Setup Node.js environment
-        uses: actions/setup-node@v4.0.3
+        uses: actions/setup-node@v6
 
-      - name: Install Node dependencies
-        run: sudo apt-get install python3 g++ make python3-pip upx
+      - name: Install Node.js dependencies
+        run: sudo apt-get install -y g++ make python3 python3-pip upx
 
-      - name: Install packages
+      - name: Install Node.js packages
         run: npm i
+
+      - name: Clone Node.js source code
+        run: git clone --depth 1 --filter=tree:0 --single-branch --quiet --branch ${{ matrix.version }} https://github.com/nodejs/node
 
       - name: Build
         run:  npm run build ${{ matrix.version }} ${{ matrix.strategy }} ${{ matrix.architecture }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ vars.BUILD_NAME }}
+          path: |
+            node/out/Release/node
+            node/out/Release/node-upx

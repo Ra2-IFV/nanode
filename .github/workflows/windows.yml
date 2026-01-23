@@ -12,22 +12,65 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        version: ['v22.x', 'v18.x', 'v16.x', 'v20.x', 'v19.x', 'v17.x']
-        strategy: [a, b, c]
-        architecture: [arm64, x64]
+        version: ['v22.x']
+        strategy: [
+          full_v8_lto_ptrcomp
+        ]
+        architecture: [x64]
     steps:
       - name: Setup repo
-        uses: actions/checkout@v4
-        
+        uses: actions/checkout@v6
+
+      - name: Cache Node.js src and NPM packages
+        uses: actions/cache@v5
+        with:
+          path: |
+            ${{ github.workspace }}/node
+          key: nodejs-${{ matrix.version }}
+          restore-keys: nodejs-${{ matrix.version }}
+
+      - name: Cache chocolatey lib and NPM packages
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.npm
+            ~/AppData/npm-cache
+            C:\ProgramData\chocolatey\lib\BoxStarter*
+            C:\ProgramData\chocolatey\lib\git.install
+            C:\ProgramData\chocolatey\lib\vcredist140
+            C:\ProgramData\chocolatey\lib\python314
+            C:\ProgramData\chocolatey\lib\nasm
+            C:\ProgramData\chocolatey\lib\upx
+          key: chocolatey-npm-${{ runner.arch }}-${{ github.sha }}
+          restore-keys: |
+            chocolatey-${{ runner.arch }}-
+            chocolatey-npm-${{ runner.arch }}-
+
       - name: Setup Node.js environment
-        uses: actions/setup-node@v4.0.3
+        uses: actions/setup-node@v6
 
       - name: Install Node dependencies
-        run: powershell.exe ./win-setup-env.ps1
+        run: 'powershell.exe -File ./scripts/setup_env.ps1'
+
       - name: Install packages
         run: npm i
+
+      - name: Clone Node.js source code
+        run: |
+          if (!(Test-Path "node")){
+            git clone --depth 1 --filter=tree:0 --single-branch --quiet `
+              --branch ${{ matrix.version }} https://github.com/nodejs/node.git/
+          }
 
       - name: Build
         run:  npm run build ${{ matrix.version }} ${{ matrix.strategy }} ${{ matrix.architecture }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: node-${{ matrix.version }}-${{ matrix.architecture }}-${{ matrix.strategy }}
+          path: |
+            node/out/Release/node.exe
+            node/out/Release/node-upx.exe
